@@ -1,81 +1,105 @@
-from flask import Flask 
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_restful import Resource, Api, reqparse, fields, marshal_with, abort
+from flask_restx import Resource, Api, fields, Namespace, abort
 
-app = Flask(__name__) 
+app = Flask(__name__)
+
+# Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-db = SQLAlchemy(app) 
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# Initialize Flask-RESTx API
 api = Api(app)
 
-class UserModel(db.Model): 
+# Define a namespace for users
+post_ns = Namespace('posts', description='Blog post management operations')
+
+# Database Model
+class PostModel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(80), unique=True, nullable=False)
+    title = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(80), unique=True, nullable=False)
 
-    def __repr__(self): 
-        return f"User(name = {self.name}, email = {self.email})"
+    def __repr__(self):
+        return f"Post(title={self.title}, description={self.description})"
 
-user_args = reqparse.RequestParser()
-user_args.add_argument('name', type=str, required=True, help="Name cannot be blank")
-user_args.add_argument('email', type=str, required=True, help="Email cannot be blank")
+# Serializer (for marshalling data)
+post_model = post_ns.model('Post', {
+    'id': fields.Integer(readonly=True, description='Post ID'),
+    'title': fields.String(required=True, description='Post title'),
+    'description': fields.String(required=True, description='Post description')
+})
 
-userFields = {
-    'id':fields.Integer,
-    'name':fields.String,
-    'email':fields.String,
-}
+# Parser for request payload validation
+post_parser = post_ns.parser()
+post_parser.add_argument('title', type=str, required=True, help='Title cannot be blank')
+post_parser.add_argument('description', type=str, required=True, help='Description cannot be blank')
 
-class Users(Resource):
-    @marshal_with(userFields)
+# Resource Classes
+@post_ns.route('/')
+class Posts(Resource):
+    @post_ns.marshal_list_with(post_model)
     def get(self):
-        users = UserModel.query.all() 
-        return users 
-    
-    @marshal_with(userFields)
-    def post(self):
-        args = user_args.parse_args()
-        user = UserModel(name=args["name"], email=args["email"])
-        db.session.add(user) 
-        db.session.commit()
-        users = UserModel.query.all()
-        return users, 201
-    
-class User(Resource):
-    @marshal_with(userFields)
-    def get(self, id):
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        return user 
-    
-    @marshal_with(userFields)
-    def patch(self, id):
-        args = user_args.parse_args()
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        user.name = args["name"]
-        user.email = args["email"]
-        db.session.commit()
-        return user 
-    
-    @marshal_with(userFields)
-    def delete(self, id):
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        db.session.delete(user)
-        db.session.commit()
-        users = UserModel.query.all()
-        return users
+        """Get all users"""
+        posts = PostModel.query.all()
+        return posts
 
-    
-api.add_resource(Users, '/api/users/')
-api.add_resource(User, '/api/users/<int:id>')
+    @post_ns.expect(post_parser)
+    @post_ns.marshal_with(post_model, code=201)
+    def post(self):
+        """Create a new user"""
+        args = post_parser.parse_args()
+        post = PostModel(title=args['title'], description=args['description'])
+        db.session.add(post)
+        db.session.commit()
+        return post, 201
+
+
+@post_ns.route('/<int:id>')
+class Post(Resource):
+    @post_ns.marshal_with(post_model)
+    def get(self, id):
+        """Get a post by ID"""
+        post = PostModel.query.get(id)
+        if not post:
+            abort(404, 'Post not found')
+        return post
+
+    @post_ns.expect(post_parser)
+    @post_ns.marshal_with(post_model)
+    def patch(self, id):
+        """Update a post"""
+        args = post_parser.parse_args()
+        post = PostModel.query.get(id)
+        if not post:
+            abort(404, 'Post not found')
+
+        post.title = args['title']
+        post.description = args['description']
+        db.session.commit()
+        return post
+
+    @post_ns.marshal_with(post_model, code=200)
+    def delete(self, id):
+        """Delete a post"""
+        post = PostModel.query.get(id)
+        if not post:
+            abort(404, 'Post not found')
+
+        db.session.delete(post)
+        db.session.commit()
+        
+        posts = PostModel.query.all()
+        return posts, 200
+
+# Add the namespace to the API
+api.add_namespace(post_ns, path='/api/posts')
 
 @app.route('/')
 def home():
-    return '<h1>Flask REST API</h1>'
+    return '<h1>Flask-RESTx API</h1>'
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    # db.create_all()  # Create database tables
+    app.run(debug=True)
