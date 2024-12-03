@@ -7,71 +7,71 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 db = SQLAlchemy(app) 
 api = Api(app)
 
-class UserModel(db.Model): 
+class PostModel(db.Model): 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(80), unique=True, nullable=False)
+    title = db.Column(db.String(80), unique=True, nullable=False)
+    description = db.Column(db.String(80), unique=False, nullable=False)
 
     def __repr__(self): 
-        return f"User(name = {self.name}, email = {self.email})"
+        return f"Post(title = {self.title}, description = {self.description})"
 
-user_args = reqparse.RequestParser()
-user_args.add_argument('name', type=str, required=True, help="Name cannot be blank")
-user_args.add_argument('email', type=str, required=True, help="Email cannot be blank")
+post_args = reqparse.RequestParser()
+post_args.add_argument('title', type=str, required=True, help="Title cannot be blank")
+post_args.add_argument('description', type=str, required=True, help="Description cannot be blank")
 
-userFields = {
+postFields = {
     'id':fields.Integer,
-    'name':fields.String,
-    'email':fields.String,
+    'title':fields.String,
+    'description':fields.String,
 }
 
-class Users(Resource):
-    @marshal_with(userFields)
+class Posts(Resource):
+    @marshal_with(postFields)
     def get(self):
-        users = UserModel.query.all() 
-        return users 
+        posts = PostModel.query.all() 
+        return posts 
     
-    @marshal_with(userFields)
+    @marshal_with(postFields)
     def post(self):
-        args = user_args.parse_args()
-        user = UserModel(name=args["name"], email=args["email"])
-        db.session.add(user) 
+        args = post_args.parse_args()
+        post = PostModel(title=args["title"], description=args["description"])
+        db.session.add(post) 
         db.session.commit()
-        users = UserModel.query.all()
-        return users, 201
+        posts = PostModel.query.all()
+        return posts, 201
     
-class User(Resource):
-    @marshal_with(userFields)
+class Post(Resource):
+    @marshal_with(postFields)
     def get(self, id):
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        return user 
+        post = PostModel.query.filter_by(id=id).first() 
+        if not post: 
+            abort(404, message="post not found")
+        return post 
     
-    @marshal_with(userFields)
+    @marshal_with(postFields)
     def patch(self, id):
-        args = user_args.parse_args()
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        user.name = args["name"]
-        user.email = args["email"]
+        args = post_args.parse_args()
+        post = PostModel.query.filter_by(id=id).first() 
+        if not post: 
+            abort(404, message="post not found")
+        post.title = args["title"]
+        post.description = args["description"]
         db.session.commit()
-        return user 
+        return post 
     
-    @marshal_with(userFields)
+    @marshal_with(postFields)
     def delete(self, id):
-        user = UserModel.query.filter_by(id=id).first() 
-        if not user: 
-            abort(404, message="User not found")
-        db.session.delete(user)
+        post = PostModel.query.filter_by(id=id).first() 
+        if not post: 
+            abort(404, message="Post not found")
+        db.session.delete(post)
         db.session.commit()
-        users = UserModel.query.all()
-        return users
+        posts = PostModel.query.all()
+        return posts
 
     
-api.add_resource(Users, '/api/users/')
-api.add_resource(User, '/api/users/<int:id>')
+api.add_resource(Posts, '/api/posts/')
+api.add_resource(Post, '/api/posts/<int:id>')
 
 @app.route('/')
 def home():
